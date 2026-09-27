@@ -1,55 +1,95 @@
+import io
+import contextlib
 import streamlit as st
 from generator import LangChainCodeSnippetGenerator
 
-st.set_page_config(page_title="TCS Code Generator", layout="wide")
+# Initialize backend engine
+@st.cache_resource
+def get_generator():
+    return LangChainCodeSnippetGenerator()
 
-st.title("⚡ TCS Code Snippet Generator with Memory")
-st.caption("Powered by LangChain, Gemini, and SQLite Persistence")
+generator = get_generator()
 
-generator = LangChainCodeSnippetGenerator()
+# Initialize session messages if not present
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# Sidebar: Manage Active Sessions / History
-st.sidebar.title("🗂️ Session Storage")
-session_id = st.sidebar.text_input("Active Session ID", value="session_1")
+# Define the Modal Window for Testing Code
+@st.dialog("🧪 Code Execution Window", width="large")
+def run_code_modal(code_to_run: str):
+    st.caption("Running Python snippet in isolated context...")
+    
+    # Display code preview inside an expander
+    with st.expander("View Code Being Executed", expanded=False):
+        st.code(code_to_run, language="python")
 
-if st.sidebar.button("Clear Current Session History"):
-    history = generator._get_session_history(session_id)
-    history.clear()
-    st.sidebar.success(f"Cleared memory for '{session_id}'!")
+    # Execution buffers
+    output_buffer = io.StringIO()
+    error_buffer = io.StringIO()
+    execution_scope = {}
 
-st.subheader(f"Current Session: `{session_id}`")
+    try:
+        # Redirect stdout and stderr during exec
+        with contextlib.redirect_stdout(output_buffer), contextlib.redirect_stderr(error_buffer):
+            exec(code_to_run, execution_scope)
+            
+        output = output_buffer.getvalue()
+        errors = error_buffer.getvalue()
 
-# Render active chat history from SQLite DB
-history = generator._get_session_history(session_id)
-if history.messages:
-    st.markdown("### 💬 Conversation & Revision Log")
-    for msg in history.messages:
-        role = "👤 Requirement / Refinement" if msg.type == "human" else "🤖 Generated Output"
-        with st.chat_message(msg.type):
-            st.write(f"**{role}**")
-            if msg.type == "ai":
-                code = msg.content.replace("```python\n", "").replace("```", "").strip()
-                st.code(code, language="python")
-            else:
-                st.write(msg.content)
+        if output:
+            st.success("Execution Completed Successfully")
+            st.markdown("**Console Output (`stdout`):**")
+            st.code(output, language="text")
+        elif errors:
+            st.warning("Executed with Warnings/Errors")
+            st.code(errors, language="text")
+        else:
+            st.info("Code executed successfully, but produced no printed output. Ensure your script includes `print()` calls to view results.")
 
-st.divider()
+    except Exception as e:
+        st.error(f"Runtime Exception: {type(e).__name__}")
+        st.code(str(e), language="text")
 
-# Input area for initial generation or follow-up edits
-user_input = st.text_area(
-    "Enter a requirement OR request a modification:",
-    placeholder="e.g., 'Write a function to sort a list of numbers' OR 'Now update the previous function to sort in descending order.'"
-)
+# App Header
+st.title("⚡ AI Code Snippet Generator")
 
-if st.button("Submit Request", type="primary"):
-    if not user_input.strip():
-        st.warning("Please enter a valid request.")
-    else:
-        with st.spinner("Processing request and updating code..."):
-            result = generator.generate(user_input, session_id=session_id)
+# Render Conversation History First
+for idx, msg in enumerate(st.session_state.messages):
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+        
+        # If the message contains generated code, display the execution button
+        if msg["role"] == "assistant" and "```python" in msg["content"]:
+            try:
+                code_snippet = msg["content"].split("```python")[1].split("```")[0].strip()
+                if st.button("▶ Test Code", key=f"run_btn_{idx}"):
+                    run_code_modal(code_snippet)
+            except IndexError:
+                pass
 
-            if result["status"] == "Success":
-                st.success("Successfully generated/updated code!")
-                st.rerun()
-            else:
-                st.error(f"Error: {result['validation']}")
+# Chat Input (Automatically clears text on submission)
+if user_prompt := st.chat_input("Ask for a Python snippet or request modifications..."):
+    # Store and render user message
+    st.session_state.messages.append({"role": "user", "content": user_prompt})
+    with st.chat_message("user"):
+        st.markdown(user_prompt)
+
+    # Generate assistant response
+    with st.chat_message("assistant"):
+        with st.spinner("Generating snippet..."):
+            session_id = st.session_state.get("session_id", "default_session")
+            response = generator.generate_code(user_prompt, session_id=session_id)
+            st.markdown(response)
+            
+            # Extract code and attach test button immediately for new response
+            if "```python" in response:
+                try:
+                    code_snippet = response.split("```python")[1].split("```")[0].strip()
+                    if st.button("▶ Test Code", key=f"run_btn_{len(st.session_state.messages)}"):
+                        run_code_modal(code_snippet)
+                except IndexError:
+                    pass
+
+    # Save assistant response to session state
+    st.session_state.messages.append({"role": "assistant", "content": response})
+              
