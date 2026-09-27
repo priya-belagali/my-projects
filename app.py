@@ -78,7 +78,7 @@ if user_prompt := st.chat_input("Ask for a Python snippet or request modificatio
     with st.chat_message("assistant"):
         with st.spinner("Generating snippet..."):
             session_id = st.session_state.get("session_id", "default_session")
-            response = generator.generate_code(user_prompt, session_id=session_id)
+            response = generator.generate(user_prompt, session_id=session_id)
             st.markdown(response)
             
             # Extract code and attach test button immediately for new response
