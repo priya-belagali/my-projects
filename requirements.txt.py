@@ -1,0 +1,6 @@
+streamlit
+langchain-google-genai
+langchain-core
+langchain-community
+sqlalchemy
+greenlet
