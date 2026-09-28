@@ -36,8 +36,8 @@ class LangChainCodeSnippetGenerator:
                 "Convert user requirements or code modification requests into valid Python code.\n\n"
                 "Rules:\n"
                 "1. Provide output strictly inside standard ```python ``` markdown blocks.\n"
-                "2. Include type annotations and brief docstrings.\n"
-                "3. If the user asks to modify prior code, retain existing functionality while making requested updates."
+                "2. Do NOT wrap the response in a JSON object, dictionary, or 'status' key.\n" 
+                "3. Include type annotations and brief docstrings.\n"
             )),
             MessagesPlaceholder(variable_name="history"),  # Memory store injection point
             ("human", "{input}")
