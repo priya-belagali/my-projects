@@ -25,7 +25,7 @@ class PythonCodeOutputParser(BaseOutputParser[str]):
 
 
 class LangChainCodeSnippetGenerator:
-    def __init__(self, model_name: str = "gemini-2.5-flash", db_path: str = "sqlite:///history.db"):
+    def __init__(self, model_name: str = "gemini-1.5-flash", db_path: str = "sqlite:///history.db"):
         self.llm = ChatGoogleGenerativeAI(model=model_name, temperature=0.0)
         self.db_path = db_path
 
